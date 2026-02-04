@@ -8,9 +8,11 @@ use anyhow::Result;
 mod api;
 mod app;
 mod config;
+mod repos;
 mod state;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenvy::dotenv().ok();
     app::run().await
 }

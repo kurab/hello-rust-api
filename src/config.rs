@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 
 pub struct Config {
     pub addr: SocketAddr,
+    pub database_url: String,
 }
 
 impl Config {
@@ -18,6 +19,10 @@ impl Config {
             .unwrap_or(3000);
 
         let addr: SocketAddr = format!("0.0.0.0:{port}").parse()?;
-        Ok(Self { addr })
+
+        let database_url = std::env::var("DATABASE_URL")
+            .map_err(|_| anyhow::anyhow!("DATABASE_URL is not set"))?;
+
+        Ok(Self { addr, database_url })
     }
 }

@@ -4,11 +4,13 @@
  *   - ex: db: PgPool, id_codec: IdCodec, auth: AuthConfig など
  * - Clone 前提で持つ (内部は Arc/Clone cheap)
  */
-#[derive(Clone, Debug, Default)]
-pub struct AppState;
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub db: sqlx::PgPool,
+}
 
 impl AppState {
-    pub fn new() -> Self {
-        Self
+    pub fn new(db: sqlx::PgPool) -> Self {
+        Self { db }
     }
 }
