@@ -7,6 +7,8 @@
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
+use crate::repos::error::RepoError;
+
 #[derive(Debug, FromRow)]
 pub struct UserRow {
     #[sqlx(rename = "userId")]
@@ -17,7 +19,7 @@ pub struct UserRow {
     pub image_url: Option<String>,
 }
 
-pub async fn list(db: &PgPool) -> Result<Vec<UserRow>, sqlx::Error> {
+pub async fn list(db: &PgPool) -> Result<Vec<UserRow>, RepoError> {
     let rows = sqlx::query_as::<_, UserRow>(
         r#"
         SELECT "userId", "userName", "imageUrl"
@@ -27,6 +29,10 @@ pub async fn list(db: &PgPool) -> Result<Vec<UserRow>, sqlx::Error> {
     )
     .fetch_all(db)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(rows)
 }
@@ -35,7 +41,7 @@ pub async fn create(
     db: &PgPool,
     user_name: &str,
     image_url: Option<&str>,
-) -> Result<UserRow, sqlx::Error> {
+) -> Result<UserRow, RepoError> {
     let row = sqlx::query_as::<_, UserRow>(
         r#"
         INSERT INTO users ("userName", "imageUrl")
@@ -47,11 +53,15 @@ pub async fn create(
     .bind(image_url)
     .fetch_one(db)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(row)
 }
 
-pub async fn get(db: &PgPool, user_id: Uuid) -> Result<Option<UserRow>, sqlx::Error> {
+pub async fn get(db: &PgPool, user_id: Uuid) -> Result<Option<UserRow>, RepoError> {
     let row = sqlx::query_as::<_, UserRow>(
         r#"
         SELECT "userId", "userName", "imageUrl"
@@ -62,6 +72,10 @@ pub async fn get(db: &PgPool, user_id: Uuid) -> Result<Option<UserRow>, sqlx::Er
     .bind(user_id)
     .fetch_optional(db)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(row)
 }
@@ -71,7 +85,7 @@ pub async fn update(
     user_id: Uuid,
     user_name: Option<&str>,
     image_url: Option<Option<&str>>,
-) -> Result<Option<UserRow>, sqlx::Error> {
+) -> Result<Option<UserRow>, RepoError> {
     // image_url: Some(Some(v)) -> set to v
     // image_url: Some(None)    -> set to NULL
     // image_url: None          -> do not update
@@ -94,11 +108,15 @@ pub async fn update(
     .bind(image_url.flatten()) // $4: new image_url value
     .fetch_optional(db)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(row)
 }
 
-pub async fn delete(db: &PgPool, user_id: Uuid) -> Result<bool, sqlx::Error> {
+pub async fn delete(db: &PgPool, user_id: Uuid) -> Result<bool, RepoError> {
     let result = sqlx::query(
         r#"
         DELETE FROM users
@@ -108,6 +126,10 @@ pub async fn delete(db: &PgPool, user_id: Uuid) -> Result<bool, sqlx::Error> {
     .bind(user_id)
     .execute(db)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(result.rows_affected() > 0)
 }

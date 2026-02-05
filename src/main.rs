@@ -8,6 +8,7 @@ use anyhow::Result;
 mod api;
 mod app;
 mod config;
+mod error;
 mod repos;
 mod services;
 mod state;

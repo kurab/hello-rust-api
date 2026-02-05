@@ -7,6 +7,8 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::repos::error::RepoError;
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PostRow {
     #[sqlx(rename = "postId")]
@@ -25,7 +27,7 @@ pub struct PostRow {
     pub updated_at: DateTime<Utc>,
 }
 
-pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> anyhow::Result<Vec<PostRow>> {
+pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> Result<Vec<PostRow>, RepoError> {
     let rows = sqlx::query_as::<_, PostRow>(
         r#"
         SELECT
@@ -39,6 +41,10 @@ pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> anyhow::Result<Vec<
     .bind(offset)
     .fetch_all(pool)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(rows)
 }
@@ -48,7 +54,7 @@ pub async fn create(
     title: &str,
     content: &str,
     author_id: Uuid,
-) -> anyhow::Result<PostRow> {
+) -> Result<PostRow, RepoError> {
     let row = sqlx::query_as::<_, PostRow>(
         r#"
         INSERT INTO posts (title, content, "authorId")
@@ -62,11 +68,15 @@ pub async fn create(
     .bind(author_id)
     .fetch_one(pool)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(row)
 }
 
-pub async fn get(pool: &PgPool, post_id: i64) -> anyhow::Result<Option<PostRow>> {
+pub async fn get(pool: &PgPool, post_id: i64) -> Result<Option<PostRow>, RepoError> {
     let row = sqlx::query_as::<_, PostRow>(
         r#"
         SELECT
@@ -78,6 +88,10 @@ pub async fn get(pool: &PgPool, post_id: i64) -> anyhow::Result<Option<PostRow>>
     .bind(post_id)
     .fetch_optional(pool)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(row)
 }
@@ -87,7 +101,7 @@ pub async fn update(
     post_id: i64,
     title: Option<&str>,
     content: Option<&str>,
-) -> anyhow::Result<Option<PostRow>> {
+) -> Result<Option<PostRow>, RepoError> {
     let row = sqlx::query_as::<_, PostRow>(
         r#"
         UPDATE posts
@@ -104,11 +118,15 @@ pub async fn update(
     .bind(content)
     .fetch_optional(pool)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(row)
 }
 
-pub async fn delete(pool: &PgPool, post_id: i64) -> anyhow::Result<bool> {
+pub async fn delete(pool: &PgPool, post_id: i64) -> Result<bool, RepoError> {
     let result = sqlx::query(
         r#"
         DELETE FROM posts
@@ -118,6 +136,10 @@ pub async fn delete(pool: &PgPool, post_id: i64) -> anyhow::Result<bool> {
     .bind(post_id)
     .execute(pool)
     .await?;
+    /*
+     * in case you need to give meaning to errors
+     * .await.map_err(RepoError::from_sqlx)?;
+     */
 
     Ok(result.rows_affected() > 0)
 }

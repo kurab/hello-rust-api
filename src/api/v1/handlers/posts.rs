@@ -12,15 +12,18 @@ use crate::{
         dto::posts::{CreatePostRequest, PostResponse, UpdatePostRequest},
         extractors::public_id::PublicPostId,
     },
+    error::AppError,
     repos::post_repo,
     state::AppState,
 };
 
-fn row_to_response(state: &AppState, row: post_repo::PostRow) -> Result<PostResponse, StatusCode> {
+fn row_to_response(state: &AppState, row: post_repo::PostRow) -> Result<PostResponse, AppError> {
+    /*
     let public_id = state
         .id_codec
         .encode(row.post_id)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;*/
+    let public_id = state.id_codec.encode(row.post_id)?;
 
     Ok(PostResponse {
         id: public_id,
@@ -32,10 +35,12 @@ fn row_to_response(state: &AppState, row: post_repo::PostRow) -> Result<PostResp
 
 pub async fn list_posts(
     State(state): State<AppState>,
-) -> Result<Json<Vec<PostResponse>>, StatusCode> {
+) -> Result<Json<Vec<PostResponse>>, AppError> {
+    /*
     let rows = post_repo::list(&state.db, 50, 0)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;*/
+    let rows = post_repo::list(&state.db, 50, 0).await?;
 
     let mut res = Vec::with_capacity(rows.len()); // あらかじめ容量が分かっているので確保
     // rows.into_iter().map(|row| {
@@ -52,14 +57,20 @@ pub async fn list_posts(
 pub async fn create_post(
     State(state): State<AppState>,
     Json(req): Json<CreatePostRequest>,
-) -> Result<(StatusCode, Json<PostResponse>), StatusCode> {
-    req.validate().map_err(|_| StatusCode::BAD_REQUEST)?;
+) -> Result<(StatusCode, Json<PostResponse>), AppError> {
+    req.validate()
+        .map_err(|_| AppError::bad_request("BAD_REQUEST", "invalid request"))?;
 
+    /*
     let author_id = Uuid::parse_str(&req.author_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let row = post_repo::create(&state.db, &req.title, &req.content, author_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;*/
+    let author_id = Uuid::parse_str(&req.author_id)
+        .map_err(|_| AppError::bad_request("BAD_REQUEST", "invalid author_id"))?;
+
+    let row = post_repo::create(&state.db, &req.title, &req.content, author_id).await?;
 
     let res = row_to_response(&state, row)?;
     Ok((StatusCode::CREATED, Json(res)))
@@ -68,11 +79,14 @@ pub async fn create_post(
 pub async fn get_post(
     State(state): State<AppState>,
     post_id: PublicPostId,
-) -> Result<Json<PostResponse>, StatusCode> {
+) -> Result<Json<PostResponse>, AppError> {
+    let row = post_repo::get(&state.db, post_id.id).await?;
+    let row = row.ok_or_else(|| AppError::not_found("post"))?;
+    /*
     let row = post_repo::get(&state.db, post_id.id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or(StatusCode::NOT_FOUND)?;*/
 
     Ok(Json(row_to_response(&state, row)?))
 }
@@ -81,8 +95,9 @@ pub async fn update_post(
     State(state): State<AppState>,
     post_id: PublicPostId,
     Json(req): Json<UpdatePostRequest>,
-) -> Result<Json<PostResponse>, StatusCode> {
-    req.validate().map_err(|_| StatusCode::BAD_REQUEST)?;
+) -> Result<Json<PostResponse>, AppError> {
+    req.validate()
+        .map_err(|_| AppError::bad_request("BAD_REQUEST", "invalid request"))?;
 
     let row = post_repo::update(
         &state.db,
@@ -91,11 +106,8 @@ pub async fn update_post(
         req.content.as_deref(),
     )
     .await
-    .map_err(|e| {
-        eprintln!("post_repo::update failed: {e:?}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .map_err(|_| AppError::Internal)?
+    .ok_or_else(|| AppError::not_found("post"))?;
 
     Ok(Json(row_to_response(&state, row)?))
 }
@@ -103,14 +115,12 @@ pub async fn update_post(
 pub async fn delete_post(
     State(state): State<AppState>,
     post_id: PublicPostId,
-) -> Result<StatusCode, StatusCode> {
-    let deleted = post_repo::delete(&state.db, post_id.id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<StatusCode, AppError> {
+    let deleted = post_repo::delete(&state.db, post_id.id).await?;
 
     if deleted {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(AppError::not_found("post"))
     }
 }

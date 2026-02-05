@@ -13,16 +13,15 @@ use uuid::Uuid;
 
 use crate::{
     api::v1::dto::users::{CreateUserRequest, UpdateUserRequest, UserResponse},
+    error::AppError,
     repos::user_repo,
     state::AppState,
 };
 
 pub async fn list_users(
     State(state): State<AppState>,
-) -> Result<Json<Vec<UserResponse>>, StatusCode> {
-    let rows = user_repo::list(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<Json<Vec<UserResponse>>, AppError> {
+    let rows = user_repo::list(&state.db).await?;
     let res = rows
         .into_iter()
         .map(|u| UserResponse {
@@ -38,12 +37,11 @@ pub async fn list_users(
 pub async fn create_user(
     State(state): State<AppState>,
     Json(req): Json<CreateUserRequest>,
-) -> Result<(StatusCode, Json<UserResponse>), StatusCode> {
-    req.validate().map_err(|_| StatusCode::BAD_REQUEST)?;
+) -> Result<(StatusCode, Json<UserResponse>), AppError> {
+    req.validate()
+        .map_err(|_| AppError::bad_request("BAD_REQUEST", "invalid request"))?;
 
-    let row = user_repo::create(&state.db, &req.user_name, req.image_url.as_deref())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = user_repo::create(&state.db, &req.user_name, req.image_url.as_deref()).await?;
 
     Ok((
         StatusCode::CREATED,
@@ -58,11 +56,9 @@ pub async fn create_user(
 pub async fn get_user(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
-) -> Result<Json<UserResponse>, StatusCode> {
-    let row = user_repo::get(&state.db, user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<Json<UserResponse>, AppError> {
+    let row = user_repo::get(&state.db, user_id).await?;
+    let row = row.ok_or_else(|| AppError::not_found("user"))?;
 
     Ok(Json(UserResponse {
         id: row.id,
@@ -75,8 +71,9 @@ pub async fn update_user(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
     Json(req): Json<UpdateUserRequest>,
-) -> Result<Json<UserResponse>, StatusCode> {
-    req.validate().map_err(|_| StatusCode::BAD_REQUEST)?;
+) -> Result<Json<UserResponse>, AppError> {
+    req.validate()
+        .map_err(|_| AppError::bad_request("BAD_REQUEST", "invalid request"))?;
 
     // image_url tri-state:
     // - None: do not update
@@ -86,11 +83,8 @@ pub async fn update_user(
 
     let row = user_repo::update(&state.db, user_id, req.user_name.as_deref(), image_url)
         .await
-        .map_err(|e| {
-            eprintln!("user_repo::update failed: {e:?}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|_| AppError::Internal)?
+        .ok_or_else(|| AppError::not_found("user"))?;
 
     Ok(Json(UserResponse {
         id: row.id,
@@ -102,14 +96,12 @@ pub async fn update_user(
 pub async fn delete_user(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    let deleted = user_repo::delete(&state.db, user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<StatusCode, AppError> {
+    let deleted = user_repo::delete(&state.db, user_id).await?;
 
     if deleted {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(AppError::not_found("user"))
     }
 }
