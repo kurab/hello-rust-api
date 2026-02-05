@@ -5,10 +5,10 @@
  * - axum::serve() で起動
  */
 use anyhow::Result;
-use axum::Router;
+use axum::{Router, routing::get};
 use sqlx::postgres::PgPoolOptions;
 
-use crate::{api, config::Config, state::AppState};
+use crate::{api, config::Config, services::id_codec::IdCodec, state::AppState};
 
 pub async fn run() -> Result<()> {
     let config = Config::from_env()?;
@@ -30,7 +30,9 @@ async fn build_state(config: &Config) -> Result<AppState> {
         .connect(&config.database_url)
         .await?;
 
-    Ok(AppState::new(db))
+    let id_codec = IdCodec::new(config.sqids_min_length, &config.sqids_alphabet)?;
+
+    Ok(AppState::new(db, id_codec))
 }
 
 /**
@@ -38,6 +40,7 @@ async fn build_state(config: &Config) -> Result<AppState> {
  */
 fn build_router(state: AppState) -> Router {
     Router::new()
+        .route("/health", get(api::health::health))
         .nest("/api/v1", api::v1::routes())
         .with_state(state)
 }

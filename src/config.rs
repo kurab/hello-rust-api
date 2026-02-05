@@ -9,6 +9,8 @@ use std::net::SocketAddr;
 pub struct Config {
     pub addr: SocketAddr,
     pub database_url: String,
+    pub sqids_min_length: usize,
+    pub sqids_alphabet: String,
 }
 
 impl Config {
@@ -23,6 +25,20 @@ impl Config {
         let database_url = std::env::var("DATABASE_URL")
             .map_err(|_| anyhow::anyhow!("DATABASE_URL is not set"))?;
 
-        Ok(Self { addr, database_url })
+        let sqids_min_length = std::env::var("SQIDS_MIN_LENGTH")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(10);
+
+        let sqids_alphabet = std::env::var("SQIDS_ALPHABET").unwrap_or_else(|_| {
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".to_string()
+        });
+
+        Ok(Self {
+            addr,
+            database_url,
+            sqids_min_length,
+            sqids_alphabet,
+        })
     }
 }

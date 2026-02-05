@@ -1,24 +1,30 @@
 /*
  * Responsibility
  * - v1 の URL 構造を定義
- * - /health, /users, /posts, /bookmarks を next/merge
+ * - /users, /posts, /bookmarks を next/merge
  * - Bearer が必要な範囲を route_layer などで適用する設計もここで決める
  */
 use axum::{Router, routing::get};
 
+use crate::api::v1::handlers::{posts, users};
 use crate::state::AppState;
-
-use crate::api::v1::handlers::{
-    health::health,
-    users::{create_user, delete_user, get_user, list_users, update_user},
-};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/health", get(health))
-        .route("/users", get(list_users).post(create_user))
+        // users
+        .route("/users", get(users::list_users).post(users::create_user))
         .route(
             "/users/{user_id}",
-            get(get_user).put(update_user).delete(delete_user),
+            get(users::get_user)
+                .put(users::update_user)
+                .delete(users::delete_user),
+        )
+        // posts
+        .route("/posts", get(posts::list_posts).post(posts::create_post))
+        .route(
+            "/posts/{post_id}",
+            get(posts::get_post)
+                .put(posts::update_post)
+                .delete(posts::delete_post),
         )
 }

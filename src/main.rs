@@ -9,6 +9,7 @@ mod api;
 mod app;
 mod config;
 mod repos;
+mod services;
 mod state;
 
 #[tokio::main]
