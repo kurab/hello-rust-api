@@ -9,12 +9,12 @@ mod api;
 mod app;
 mod config;
 mod error;
+mod middleware;
 mod repos;
 mod services;
 mod state;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenvy::dotenv().ok();
     app::run().await
 }

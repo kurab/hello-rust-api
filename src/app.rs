@@ -7,10 +7,9 @@
 use anyhow::Result;
 use axum::{Router, routing::get};
 use sqlx::postgres::PgPoolOptions;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{api, config::Config, services::id_codec::IdCodec, state::AppState};
+use crate::{api, config::Config, middleware, services::id_codec::IdCodec, state::AppState};
 
 fn init_tracing() {
     // Prefer RUST_LOG if set; otherwise use a sensible default.
@@ -27,12 +26,17 @@ fn init_tracing() {
 
 pub async fn run() -> Result<()> {
     init_tracing();
-    tracing::info!("starting api...");
 
     let config = Config::from_env()?;
+    tracing::info!(
+        "starting API in {:?} mode on {}",
+        config.app_env,
+        config.addr
+    );
+
     let state = build_state(&config).await?;
 
-    let app = build_router(state);
+    let app = build_router(state, &config);
 
     let listener = tokio::net::TcpListener::bind(config.addr).await?;
     axum::serve(listener, app).await?;
@@ -56,10 +60,15 @@ async fn build_state(config: &Config) -> Result<AppState> {
 /**
  * AppState: owned (move)
  */
-fn build_router(state: AppState) -> Router {
-    Router::new()
+fn build_router(state: AppState, config: &Config) -> Router {
+    let router = Router::new()
         .route("/health", get(api::health::health))
         .nest("/api/v1", api::v1::routes())
-        .with_state(state)
-        .layer(TraceLayer::new_for_http())
+        .with_state(state);
+
+    // Cross-cutting middleware (policy/infrastructure)
+    let router = middleware::security_headers::apply(router);
+    let router = middleware::cors::apply(router, config);
+
+    middleware::http::apply(router)
 }
