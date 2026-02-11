@@ -1,4 +1,5 @@
 pub mod access_jwt;
+pub mod dpop;
 pub mod factory;
 
 pub use access_jwt::AuthService;

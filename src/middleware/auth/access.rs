@@ -19,6 +19,7 @@ use axum::{
 
 use crate::api::v1::extractors::AuthCtx;
 use crate::error::AppError;
+use crate::services::auth::dpop::core as dpop_core;
 use crate::state::AppState;
 
 /// `/api/v1/*` に認証を掛けるための middleware を適用する。
@@ -71,6 +72,21 @@ async fn access_middleware(
             return Err(AppError::Unauthorized);
         }
     };
+
+    let expected_jkt = claims.cnf_jkt.as_deref();
+
+    if let Err(err) = dpop_core::verify_proof(
+        state.auth.dpop_policy(),
+        req.headers(),
+        req.method(),
+        req.uri(),
+        Some(token),
+        expected_jkt,
+        state.auth.public_base_url(),
+    ) {
+        tracing::warn!(error = ?err, "dpop verification failed");
+        return Err(AppError::Unauthorized);
+    }
 
     let auth_ctx = AuthCtx::new(claims.user_id);
 

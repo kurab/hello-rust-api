@@ -694,12 +694,14 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "base64",
  "chrono",
  "dotenvy",
  "josekit",
  "jsonwebtoken",
  "serde",
  "serde_json",
+ "sha2",
  "sqids",
  "sqlx",
  "thiserror",
@@ -708,6 +710,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
 ]
 

@@ -62,6 +62,14 @@ pub struct Config {
     pub access_token_leeway_seconds: u64,
 
     pub access_jwt_public_key_pem: String,
+    pub public_base_url: Option<String>,
+
+    pub dpop_required: bool,
+    pub dpop_iat_leeway_seconds: u64,
+    pub dpop_max_age_seconds: u64,
+    pub dpop_replay_ttl_seconds: u64,
+    pub dpop_required_ath: bool,
+    pub dpop_require_nonce: bool,
 }
 
 impl Config {
@@ -112,6 +120,42 @@ impl Config {
             .map_err(|_| ConfigError::Missing("ACCESS_JWT_PUBLIC_KEY_PEM"))?
             .replace("\\n", "\n");
 
+        let public_base_url = std::env::var("PUBLIC_BASE_URL")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+
+        // --- DPoP ---
+        let dpop_required = std::env::var("DPOP_REQUIRED")
+            .ok()
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false);
+
+        let dpop_iat_leeway_seconds = std::env::var("DPOP_IAT_LEEWAY_SECONDS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(60);
+
+        let dpop_max_age_seconds = std::env::var("DPOP_MAX_AGE_SECONDS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(300);
+
+        let dpop_replay_ttl_seconds = std::env::var("DPOP_REPLAY_TTL_SECONDS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(300);
+
+        let dpop_required_ath = std::env::var("DPOP_REQUIRED_ATH")
+            .ok()
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(true);
+
+        let dpop_require_nonce = std::env::var("DPOP_REQUIRE_NONCE")
+            .ok()
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false);
+
         Ok(Self {
             addr,
             database_url,
@@ -123,6 +167,13 @@ impl Config {
             auth_audience,
             access_token_leeway_seconds,
             access_jwt_public_key_pem,
+            public_base_url,
+            dpop_required,
+            dpop_iat_leeway_seconds,
+            dpop_max_age_seconds,
+            dpop_replay_ttl_seconds,
+            dpop_required_ath,
+            dpop_require_nonce,
         })
     }
 }

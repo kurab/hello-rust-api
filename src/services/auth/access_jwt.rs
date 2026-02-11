@@ -3,6 +3,8 @@ use serde::Deserialize;
 use std::{error::Error as StdError, fmt};
 use uuid::Uuid;
 
+use crate::services::auth::dpop::core::DpopPolicy;
+
 // Errors returned by access-token verification + strict claim validation.
 #[derive(Debug)]
 pub enum AccessJwtError {
@@ -95,7 +97,7 @@ pub struct VerifiedAccessToken {
     pub scope: Option<String>,
     pub roles: Option<Vec<String>>,
 
-    pub cnf: Option<CnfClaim>,
+    pub cnf_jkt: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -111,6 +113,8 @@ pub struct CnfClaim {
 pub struct AuthService {
     decoding_key: DecodingKey,
     validation: Validation,
+    dpop_policy: DpopPolicy,
+    public_base_url: Option<String>,
 }
 
 impl std::fmt::Debug for AuthService {
@@ -118,6 +122,7 @@ impl std::fmt::Debug for AuthService {
         // Do not print key material
         f.debug_struct("AuthService")
             .field("validation", &self.validation)
+            .field("dpop_policy", &self.dpop_policy)
             .finish()
     }
 }
@@ -128,6 +133,8 @@ impl AuthService {
         issuer: &str,
         audience: &str,
         leeway_seconds: u64,
+        dpop_policy: DpopPolicy,
+        public_base_url: Option<String>,
     ) -> Result<Self, String> {
         let decoding_key = DecodingKey::from_ed_pem(access_public_key_pem.as_bytes())
             .map_err(|e| format!("invalid ed25519 public key pem: {}", e))?;
@@ -140,6 +147,8 @@ impl AuthService {
         Ok(Self {
             decoding_key,
             validation,
+            dpop_policy,
+            public_base_url,
         })
     }
 
@@ -200,12 +209,20 @@ impl AuthService {
             jti: claims.jti,
             scope: claims.scope,
             roles: claims.roles,
-            cnf: claims.cnf,
+            cnf_jkt: claims.cnf.and_then(|c| c.jkt),
         })
     }
 
     // Helper: parse `sub` into UUID
     pub fn parse_sub_uuid(sub: &str) -> Result<Uuid, ()> {
         Uuid::parse_str(sub).map_err(|_| ())
+    }
+
+    pub fn dpop_policy(&self) -> DpopPolicy {
+        self.dpop_policy.clone()
+    }
+
+    pub fn public_base_url(&self) -> Option<&str> {
+        self.public_base_url.as_deref()
     }
 }
