@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     api::v1::{
         dto::posts::{CreatePostRequest, PostResponse, UpdatePostRequest},
-        extractors::public_id::PublicPostId,
+        extractors::{AuthCtxExtractor, public_id::PublicPostId},
     },
     error::AppError,
     repos::post_repo,
@@ -34,8 +34,10 @@ fn row_to_response(state: &AppState, row: post_repo::PostRow) -> Result<PostResp
 }
 
 pub async fn list_posts(
+    AuthCtxExtractor(auth): AuthCtxExtractor,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<PostResponse>>, AppError> {
+    tracing::info!(user_id=%auth.user_id, "authed");
     /*
     let rows = post_repo::list(&state.db, 50, 0)
         .await

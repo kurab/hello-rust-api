@@ -34,8 +34,8 @@ pub enum AppError {
     NotFound { resource: &'static str },
     //#[error("{code}: {message}")]
     //Conflict { code: &'static str, message: String },
-    //#[error("unauthorized")]
-    //Unauthorized,
+    #[error("unauthorized")]
+    Unauthorized,
     //#[error("forbidden")]
     //Forbidden,
     #[error("internal server error")]
@@ -73,12 +73,12 @@ impl IntoResponse for AppError {
                 format!("{resource} not found."),
             ),
             //AppError::Conflict { code, message } => (StatusCode::CONFLICT, code, message),
-            /*
             AppError::Unauthorized => (
                 StatusCode::UNAUTHORIZED,
                 "UNAUTHORIZED",
                 "unauthorized".into(),
             ),
+            /*
             AppError::Forbidden => (StatusCode::FORBIDDEN, "FORBIDDEN", "forbidden".into()),*/
             AppError::Internal => (
                 StatusCode::INTERNAL_SERVER_ERROR,

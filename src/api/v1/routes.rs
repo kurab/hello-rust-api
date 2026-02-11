@@ -7,10 +7,11 @@
 use axum::{Router, routing::get};
 
 use crate::api::v1::handlers::{posts, users};
+use crate::middleware::auth;
 use crate::state::AppState;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
+pub fn routes(state: AppState) -> Router<AppState> {
+    let router = Router::new()
         // users
         .route("/users", get(users::list_users).post(users::create_user))
         .route(
@@ -26,5 +27,7 @@ pub fn routes() -> Router<AppState> {
             get(posts::get_post)
                 .put(posts::update_post)
                 .delete(posts::delete_post),
-        )
+        );
+    // Apply auth middleware to all v1 routes
+    auth::access::apply(router, state)
 }

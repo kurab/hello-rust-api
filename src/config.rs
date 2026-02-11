@@ -56,6 +56,12 @@ pub struct Config {
 
     pub sqids_min_length: usize,
     pub sqids_alphabet: String,
+
+    pub auth_issuer: String,
+    pub auth_audience: String,
+    pub access_token_leeway_seconds: u64,
+
+    pub access_jwt_public_key_pem: String,
 }
 
 impl Config {
@@ -91,6 +97,21 @@ impl Config {
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".to_string()
         });
 
+        let auth_issuer =
+            std::env::var("AUTH_ISSUER").map_err(|_| ConfigError::Missing("AUTH_ISSUER"))?;
+
+        let auth_audience =
+            std::env::var("AUTH_AUDIENCE").map_err(|_| ConfigError::Missing("AUTH_AUDIENCE"))?;
+
+        let access_token_leeway_seconds = std::env::var("ACCESS_TOKEN_LEEWAY_SECONDS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(60);
+
+        let access_jwt_public_key_pem = std::env::var("ACCESS_JWT_PUBLIC_KEY_PEM")
+            .map_err(|_| ConfigError::Missing("ACCESS_JWT_PUBLIC_KEY_PEM"))?
+            .replace("\\n", "\n");
+
         Ok(Self {
             addr,
             database_url,
@@ -98,6 +119,10 @@ impl Config {
             cors_allowed_origins,
             sqids_min_length,
             sqids_alphabet,
+            auth_issuer,
+            auth_audience,
+            access_token_leeway_seconds,
+            access_jwt_public_key_pem,
         })
     }
 }
