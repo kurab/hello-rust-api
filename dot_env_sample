@@ -42,4 +42,4 @@ DPOP_REQUIRE_NONCE=false
 # openssl genpkey -algorithm ed25519 -out ed25519-private.pem
 # openssl pkey -in ed25519-private.pem -pubout -out ed25519-public.pem
 # cat ed25519-public.pem
-ACCESS_JWT_PUBLIC_KEY_PEM="-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAHw86hA71fsfaWt57pQoQi+fIxK4S01nv3dmhK66biqA=\n-----END PUBLIC KEY-----"
+ACCESS_JWT_PUBLIC_KEY_PEM=""
