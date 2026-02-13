@@ -19,12 +19,12 @@ pub struct PostRow {
 
     #[sqlx(rename = "authorId")]
     pub author_id: Uuid,
-
+    /*
     #[sqlx(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
 
     #[sqlx(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,*/
 }
 
 pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> Result<Vec<PostRow>, RepoError> {

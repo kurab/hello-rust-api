@@ -70,6 +70,8 @@ pub struct Config {
     pub dpop_replay_ttl_seconds: u64,
     pub dpop_required_ath: bool,
     pub dpop_require_nonce: bool,
+
+    pub valkey_url: String,
 }
 
 impl Config {
@@ -156,6 +158,9 @@ impl Config {
             .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
             .unwrap_or(false);
 
+        let valkey_url =
+            std::env::var("VALKEY_URL").map_err(|_| ConfigError::Missing("VALKEY_URL"))?;
+
         Ok(Self {
             addr,
             database_url,
@@ -174,6 +179,7 @@ impl Config {
             dpop_replay_ttl_seconds,
             dpop_required_ath,
             dpop_require_nonce,
+            valkey_url,
         })
     }
 }

@@ -7,6 +7,7 @@
 use axum::http::{HeaderMap, Method, Uri, header};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, jwk::Jwk};
 use serde::Deserialize;
+use tracing::warn;
 
 /// Minimal policy knobs needed by the core verifier.
 ///
@@ -24,6 +25,7 @@ pub struct DpopPolicy {
     pub require_ath: bool,
     // If true, we require `nonce` claim.
     pub require_nonce: bool,
+    pub replay_ttl_seconds: u64,
 }
 
 /// Verified DPoP proof information useful for downstream checks.
@@ -103,13 +105,19 @@ pub fn verify_proof(
     }
 
     let proof = headers
-        .get("DPop")
+        .get("DPoP")
         .ok_or(DpopError::MissingProof)?
         .to_str()
-        .map_err(|_| DpopError::InvalidJwt)?;
+        .map_err(|e| {
+            warn!(error = ?e, "invalid DPoP header encoding");
+            DpopError::InvalidJwt
+        })?;
 
     // 1) Decode header to extract JWK / typ / alg.
-    let header = jsonwebtoken::decode_header(proof).map_err(|_| DpopError::InvalidJwt)?;
+    let header = jsonwebtoken::decode_header(proof).map_err(|e| {
+        warn!(error = ?e, "invalid DPoP header");
+        DpopError::InvalidJwt
+    })?;
 
     // typ SHOULD be "dpop+jwt"
     // Some libs set it in `typ`, some in `cty`; we enforce `typ` when present.
@@ -129,7 +137,10 @@ pub fn verify_proof(
     }
 
     let jwk: Jwk = header.jwk.ok_or(DpopError::MissingJwk)?;
-    let decoding_key = DecodingKey::from_jwk(&jwk).map_err(|_| DpopError::InvalidJwt)?;
+    let decoding_key = DecodingKey::from_jwk(&jwk).map_err(|e| {
+        warn!(error = ?e, "invalid DPoP jwk");
+        DpopError::InvalidJwt
+    })?;
 
     // sender-constrained: cnf.jkt vs DPoP jwk thumbprint
     if let Some(expected) = expected_jkt {
@@ -144,9 +155,12 @@ pub fn verify_proof(
     // DPoP proof is not an access token , so we don't validate iss/ and here.
     // We do validate exp = none (DPop proof uses iat/max-age instead).
     validation.validate_exp = false;
+    validation.required_spec_claims.remove("exp");
 
-    let token_data = decode::<DpopClaims>(proof, &decoding_key, &validation)
-        .map_err(|_| DpopError::InvalidJwt)?;
+    let token_data = decode::<DpopClaims>(proof, &decoding_key, &validation).map_err(|e| {
+        warn!(error = ?e, "invalid DPoP proof signature");
+        DpopError::InvalidJwt
+    })?;
 
     // 3) Required claims.
     let htm = token_data
@@ -175,6 +189,16 @@ pub fn verify_proof(
     // RFC 9449 expects an absolute URI. In practice you often sit behind a proxy.
     // We build an absolute URI from headers when possible.
     let expected_htu = build_expected_htu(headers, uri, public_base_url);
+
+    /*
+    warn!(
+        htu = %htu,
+        expected_htu = %expected_htu,
+        htu_norm = %normalize_htu(&htu),
+        expected_norm = %normalize_htu(&expected_htu),
+        "DPoP htu check"
+    );*/
+
     if normalize_htu(&htu) != normalize_htu(&expected_htu) {
         return Err(DpopError::UriMismatch);
     }

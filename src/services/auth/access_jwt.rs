@@ -1,9 +1,10 @@
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
-use std::{error::Error as StdError, fmt};
+use std::{error::Error as StdError, fmt, sync::Arc};
 use uuid::Uuid;
 
 use crate::services::auth::dpop::core::DpopPolicy;
+use crate::services::auth::replay::store::ReplayStore;
 
 // Errors returned by access-token verification + strict claim validation.
 #[derive(Debug)]
@@ -114,6 +115,7 @@ pub struct AuthService {
     decoding_key: DecodingKey,
     validation: Validation,
     dpop_policy: DpopPolicy,
+    replay_store: Arc<dyn ReplayStore>,
     public_base_url: Option<String>,
 }
 
@@ -134,6 +136,7 @@ impl AuthService {
         audience: &str,
         leeway_seconds: u64,
         dpop_policy: DpopPolicy,
+        replay_store: Arc<dyn ReplayStore>,
         public_base_url: Option<String>,
     ) -> Result<Self, String> {
         let decoding_key = DecodingKey::from_ed_pem(access_public_key_pem.as_bytes())
@@ -148,6 +151,7 @@ impl AuthService {
             decoding_key,
             validation,
             dpop_policy,
+            replay_store,
             public_base_url,
         })
     }
@@ -224,5 +228,9 @@ impl AuthService {
 
     pub fn public_base_url(&self) -> Option<&str> {
         self.public_base_url.as_deref()
+    }
+
+    pub fn replay_store(&self) -> &dyn ReplayStore {
+        self.replay_store.as_ref()
     }
 }

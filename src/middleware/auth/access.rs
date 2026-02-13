@@ -11,7 +11,7 @@
 use axum::{
     Router,
     body::Body,
-    extract::State,
+    extract::{OriginalUri, State},
     http::{Request, header},
     middleware::{self, Next},
     response::Response,
@@ -37,6 +37,7 @@ pub fn apply(router: Router<AppState>, state: AppState) -> Router<AppState> {
 
 async fn access_middleware(
     State(state): State<AppState>,
+    OriginalUri(original_uri): OriginalUri,
     mut req: Request<Body>,
     next: Next,
 ) -> Result<Response, AppError> {
@@ -74,18 +75,42 @@ async fn access_middleware(
     };
 
     let expected_jkt = claims.cnf_jkt.as_deref();
+    let uri = &original_uri;
 
-    if let Err(err) = dpop_core::verify_proof(
+    let verified_dpop = match dpop_core::verify_proof(
         state.auth.dpop_policy(),
         req.headers(),
         req.method(),
-        req.uri(),
+        uri,
         Some(token),
         expected_jkt,
         state.auth.public_base_url(),
     ) {
-        tracing::warn!(error = ?err, "dpop verification failed");
-        return Err(AppError::Unauthorized);
+        Ok(v) => v,
+        Err(err) => {
+            tracing::warn!(error = ?err, "dpop verification failed");
+            return Err(AppError::Unauthorized);
+        }
+    };
+
+    if let Some(dpop) = verified_dpop {
+        let key = format!("dpop:{}:{}", claims.user_id, dpop.jti);
+        let ttl = state.auth.dpop_policy().replay_ttl_seconds;
+
+        let first_time = state
+            .auth
+            .replay_store()
+            .check_and_store(&key, ttl)
+            .await
+            .map_err(|err| {
+                tracing::warn!(error = ?err, "replay backend failure");
+                AppError::Unauthorized
+            })?;
+
+        if !first_time {
+            tracing::warn!(key = %key, "dpop replay detected");
+            return Err(AppError::Unauthorized);
+        }
     }
 
     let auth_ctx = AuthCtx::new(claims.user_id);

@@ -85,7 +85,7 @@ async fn build_state(config: &Config) -> Result<AppState> {
 
     let id_codec = IdCodec::new(config.sqids_min_length, &config.sqids_alphabet)?;
 
-    let auth = build_auth_service(config)?;
+    let auth = build_auth_service(config).await?;
 
     Ok(AppState::new(db, id_codec, auth))
 }

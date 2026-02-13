@@ -10,6 +10,11 @@ services:
       - POSTGRES_PASSWORD=${DB_PASS}
       - POSTGRES_DB=${DB_NAME}
     container_name: ${CONTAINER_NAME}
+  cache:
+    image: valkey/valkey:latest
+    ports:
+      - "6379:6379"
+    container_name: ${CACHE_CONTAINER_NAME}
 
 volumes:
   pgdata:
