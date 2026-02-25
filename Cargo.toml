@@ -4,3 +4,6 @@ members = [
     "dpop-gen", "auth",
 ]
 resolver = "2"
+
+[workspace.dependencies]
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "chrono", "uuid"] }
