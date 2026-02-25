@@ -1,6 +1,6 @@
 [workspace]
 members = [
     "rs",
-    "dpop-gen",
+    "dpop-gen", "auth",
 ]
 resolver = "2"
