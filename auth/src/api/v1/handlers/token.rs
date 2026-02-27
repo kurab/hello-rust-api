@@ -1,36 +1,50 @@
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use serde::{Deserialize, Serialize};
 
+use crate::api::v1::dto::{token_request::TokenRequest, token_response::TokenResponse};
 use crate::error::AppError;
 use crate::state::AppState;
 
-#[derive(Debug, Deserialize)]
-pub struct TokenRequest {
-    pub sub: String,         // UUID (string)
-    pub jkt: Option<String>, // cnf.jkt later
-}
-
-#[derive(Debug, Serialize)]
-pub struct TokenResponse {
-    pub access_token: String,
-    pub token_type: String,
-    pub expires_in: u64,
-}
-
-pub async fn issue_token(
+pub async fn token(
     State(state): State<AppState>,
     Json(req): Json<TokenRequest>,
 ) -> Result<(StatusCode, Json<TokenResponse>), AppError> {
-    let token = state.auth.issue_access_token(&req.sub, req.jkt)?;
+    match req.grant_type.as_deref() {
+        Some("refresh_token") => {
+            // Minimal refresh (without DPoP)
+            let refresh_token = req.refresh_token.ok_or(AppError::Internal)?;
 
-    Ok((
-        StatusCode::OK,
-        Json(TokenResponse {
-            access_token: token,
-            token_type: "Bearer".to_string(),
-            expires_in: state.auth.access_token_ttl_seconds(),
-        }),
-    ))
+            // Expected: TokenService validates the refresh token, issues a new access token,
+            // and may optionally rotate the refresh token in later steps.
+            let out = state.auth.refresh(&refresh_token).await?;
+
+            Ok((
+                StatusCode::OK,
+                Json(TokenResponse {
+                    access_token: out.access_token,
+                    token_type: "Bearer".to_string(),
+                    expires_in: out.expires_in,
+                    refresh_token: out.refresh_token,
+                    session_id: Some(out.session_id),
+                }),
+            ))
+        }
+        _ => {
+            // Issue access token + refresh token (minimal refresh, no DPoP binding yet)
+            let sub = req.sub.ok_or(AppError::Internal)?;
+            let out = state.auth.issue_token_pair(sub, req.jkt).await?;
+
+            Ok((
+                StatusCode::OK,
+                Json(TokenResponse {
+                    access_token: out.access_token,
+                    token_type: "Bearer".to_string(),
+                    expires_in: out.expires_in,
+                    refresh_token: out.refresh_token,
+                    session_id: Some(out.session_id),
+                }),
+            ))
+        }
+    }
 }

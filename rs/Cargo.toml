@@ -15,7 +15,7 @@ jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs", "use_pem"], defaul
 redis = { version = "1.0.3", features = ["aio", "connection-manager", "tokio-comp"], default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = "0.10.9"
+sha2 = { workspace = true }
 sqids = "0.4.2"
 sqlx = { workspace = true }
 thiserror = { workspace = true }

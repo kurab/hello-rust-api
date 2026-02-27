@@ -21,11 +21,11 @@ struct CnfClaim {
 }
 
 #[derive(Clone)]
-pub struct AuthService {
+pub struct AccessTokenService {
     jwt: JwtIssuer,
 }
 
-impl AuthService {
+impl AccessTokenService {
     pub fn new(jwt: JwtIssuer) -> Self {
         Self { jwt }
     }
@@ -34,8 +34,12 @@ impl AuthService {
     ///
     /// - `sub` must be UUID string.
     /// - `jkt` is optional for now (DPoP binding later/optional)
-    pub fn issue_access_token(&self, sub: &str, jkt: Option<String>) -> Result<String, AppError> {
-        // Validate `sub` is a UUID (fail clesed).
+    pub async fn issue_access_token(
+        &self,
+        sub: &str,
+        jkt: Option<String>,
+    ) -> Result<String, AppError> {
+        // Validate `sub` is a UUID (fail closed).
         let sub_uuid = Uuid::parse_str(sub)
             .map_err(|_| AppError::InvalidRequest("sub must be a UUID string".to_string()))?;
 
@@ -51,7 +55,8 @@ impl AuthService {
             cnf: jkt.map(|jkt| CnfClaim { jkt }),
         };
 
-        self.jwt.sign(&claims)
+        let access_token = self.jwt.sign(&claims)?;
+        Ok(access_token)
     }
 
     pub fn access_token_ttl_seconds(&self) -> u64 {

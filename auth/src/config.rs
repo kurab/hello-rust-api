@@ -47,6 +47,7 @@ impl std::error::Error for ConfigError {}
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
+    pub database_url: String,
     pub app_env: AppEnv,
     pub issuer: String,
     pub audience: String,
@@ -69,6 +70,9 @@ impl Config {
         let addr: SocketAddr = SocketAddr::from_str(&format!("0.0.0.0:{}", port))
             .map_err(|_| ConfigError::Invalid("AUTH_PORT"))?;
 
+        let database_url =
+            std::env::var("DATABASE_URL").map_err(|_| ConfigError::Missing("DATABASE_URL"))?;
+
         let app_env = AppEnv::from_env();
 
         let issuer = env::var("AUTH_ISSUER").map_err(|_| ConfigError::Missing("AUTH_ISSUER"))?;
@@ -89,6 +93,7 @@ impl Config {
 
         Ok(Config {
             addr,
+            database_url,
             app_env,
             issuer,
             audience,

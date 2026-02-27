@@ -1,11 +1,18 @@
 use axum::{Router, routing::get};
+use sqlx::postgres::PgPoolOptions;
 use std::{panic, process, sync::Arc};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::api;
 use crate::config::Config;
 use crate::error::AppError;
-use crate::services::auth::{jwt::JwtIssuer, token_issuer::AuthService};
+use crate::repos::auth_session_repo::AuthSessionRepo;
+use crate::repos::refresh_token_repo::RefreshTokenRepo;
+use crate::services::auth::refresh_token_issuer::SessionLookup;
+use crate::services::auth::{
+    access_token_issuer::AccessTokenService, jwt::JwtIssuer,
+    refresh_token_issuer::RefreshTokenService, token_service::TokenService,
+};
 use crate::state::AppState;
 
 fn init_tracing() {
@@ -76,12 +83,40 @@ async fn build_state(config: &Config) -> Result<AppState, AppError> {
         config.access_token_ttl_seconds,
     )?;
 
-    let auth = Arc::new(AuthService::new(jwt));
+    let access_tokens = AccessTokenService::new(jwt);
+
+    // DB connection pool (shared by repos/services). We keep it inside the AuthService via repos for now.
+    let db = PgPoolOptions::new()
+        .connect(&config.database_url)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=%e, "failed to connect to database");
+            AppError::Internal
+        })?;
+
+    // Note: TokenService needs an AuthSessionRepo (for creating sessions on token issuance),
+    // while RefreshTokenService only needs a trait object for session lookup.
+    // Build two repos backed by the same pool to avoid requiring AuthSessionRepo: Clone.
+    let auth_session_repo = AuthSessionRepo::new(db.clone());
+    let sessions: Arc<dyn SessionLookup> = Arc::new(AuthSessionRepo::new(db.clone()));
+
+    let refresh_token_repo = RefreshTokenRepo::new(db);
+    let refresh_tokens = RefreshTokenService::new(
+        refresh_token_repo.into(),
+        sessions,
+        config.refresh_token_ttl_seconds,
+    );
+
+    let auth = Arc::new(TokenService::new(
+        access_tokens,
+        refresh_tokens,
+        auth_session_repo,
+    ));
 
     Ok(AppState::new(auth))
 }
 
-fn build_router(state: AppState, config: &Config) -> Router {
+fn build_router(state: AppState, _config: &Config) -> Router {
     async fn health() -> &'static str {
         "ok"
     }
