@@ -1,6 +1,6 @@
 use axum::Json;
-use axum::extract::State;
-use axum::http::StatusCode;
+use axum::extract::{OriginalUri, State};
+use axum::http::{HeaderMap, Method, StatusCode};
 
 use crate::api::v1::dto::{token_request::TokenRequest, token_response::TokenResponse};
 use crate::error::AppError;
@@ -8,16 +8,26 @@ use crate::state::AppState;
 
 pub async fn token(
     State(state): State<AppState>,
+    method: Method,
+    OriginalUri(uri): OriginalUri,
+    headers: HeaderMap,
     Json(req): Json<TokenRequest>,
 ) -> Result<(StatusCode, Json<TokenResponse>), AppError> {
     match req.grant_type.as_deref() {
         Some("refresh_token") => {
-            // Minimal refresh (without DPoP)
             let refresh_token = req.refresh_token.ok_or(AppError::Internal)?;
 
-            // Expected: TokenService validates the refresh token, issues a new access token,
-            // and may optionally rotate the refresh token in later steps.
-            let out = state.auth.refresh(&refresh_token).await?;
+            // DPoP header
+            let dpop = headers
+                .get("DPoP")
+                .and_then(|v| v.to_str().ok())
+                .ok_or(AppError::Unauthorized)?;
+
+            let url = uri.to_string();
+            let out = state
+                .auth
+                .refresh(&refresh_token, dpop, method.as_str(), &url)
+                .await?;
 
             Ok((
                 StatusCode::OK,

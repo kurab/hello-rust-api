@@ -6,12 +6,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::api;
 use crate::config::Config;
 use crate::error::AppError;
-use crate::repos::auth_session_repo::AuthSessionRepo;
-use crate::repos::refresh_token_repo::RefreshTokenRepo;
-use crate::services::auth::refresh_token_issuer::SessionLookup;
+use crate::repos::{auth_session_repo::AuthSessionRepo, refresh_token_repo::RefreshTokenRepo};
 use crate::services::auth::{
-    access_token_issuer::AccessTokenService, jwt::JwtIssuer,
-    refresh_token_issuer::RefreshTokenService, token_service::TokenService,
+    access_token_issuer::AccessTokenService,
+    dpop::{policy::DpopPolicy, verifier::DpopVerifier},
+    jwt::JwtIssuer,
+    refresh_token_issuer::{RefreshTokenService, SessionLookup},
+    token_service::TokenService,
 };
 use crate::state::AppState;
 
@@ -101,11 +102,17 @@ async fn build_state(config: &Config) -> Result<AppState, AppError> {
     let sessions: Arc<dyn SessionLookup> = Arc::new(AuthSessionRepo::new(db.clone()));
 
     let refresh_token_repo = RefreshTokenRepo::new(db);
+    let dpop_policy = DpopPolicy::default();
+    let dpop_verifier = Arc::new(DpopVerifier::new(
+        dpop_policy,
+        config.public_auth_base_url.clone(),
+    ));
     let refresh_tokens = RefreshTokenService::new(
         refresh_token_repo.into(),
         sessions,
         config.refresh_token_ttl_seconds,
-    );
+    )
+    .with_dpop_verifier(dpop_verifier);
 
     let auth = Arc::new(TokenService::new(
         access_tokens,

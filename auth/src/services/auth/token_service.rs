@@ -41,7 +41,6 @@ impl TokenService {
         sub: Uuid,
         jkt: Option<String>,
     ) -> Result<IssuedTokenPair, AppError> {
-        //let session_id = Uuid::new_v4();
         let session = self
             .auth_session_repo
             .create(sub, None)
@@ -72,19 +71,27 @@ impl TokenService {
 
     /// Refresh an access token using a refresh token.
     ///
-    /// Step 1 (minimal refresh / no DPoP binding):
+    /// Step 2 (DPoP-bound refresh):
     /// - validate the refresh token (active + not expired + not revoked)
+    /// - (later) verify the DPoP proof and enforce binding (session.dpop_jkt)
     /// - issue a new access token for the same subject
     /// - return the same refresh token (no rotation yet; rotation is step 3)
-    pub async fn refresh(&self, refresh_token: &str) -> Result<IssuedTokenPair, AppError> {
-        // NOTE:
-        // RefreshTokenService must provide validate_refresh_token that returns the
-        // subject and session_id bound to this refresh token.
+    pub async fn refresh(
+        &self,
+        refresh_token: &str,
+        dpop_proof: &str,
+        method: &str,
+        url: &str,
+    ) -> Result<IssuedTokenPair, AppError> {
         let now: DateTime<Utc> = Utc::now();
+        // Step2: require DPoP header to be present (full cryptographic verification is done later).
+        if dpop_proof.trim().is_empty() {
+            return Err(AppError::Unauthorized);
+        }
 
         let v = self
             .refresh_issuer
-            .validate_refresh_token(refresh_token, now)
+            .validate_refresh_token(refresh_token, now, dpop_proof, method, url)
             .await?
             .ok_or(AppError::Unauthorized)?;
 

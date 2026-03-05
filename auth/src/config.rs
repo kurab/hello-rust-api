@@ -56,6 +56,9 @@ pub struct Config {
     // Token lifetimes (seconds)
     pub access_token_ttl_seconds: u64,
     pub refresh_token_ttl_seconds: u64,
+
+    pub public_auth_base_url: Option<String>,
+    pub refresh_dpop_required: bool,
 }
 
 impl Config {
@@ -91,6 +94,16 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(2_592_000); // 30 days
 
+        let public_auth_base_url = std::env::var("PUBLIC_AUTH_BASE_URL")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+
+        let refresh_dpop_required = std::env::var("REFRESH_DPOP_REQUIRED")
+            .ok()
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false);
+
         Ok(Config {
             addr,
             database_url,
@@ -100,6 +113,8 @@ impl Config {
             access_jwt_private_key_pem,
             access_token_ttl_seconds,
             refresh_token_ttl_seconds,
+            public_auth_base_url,
+            refresh_dpop_required,
         })
     }
 }

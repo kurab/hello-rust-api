@@ -128,6 +128,47 @@ impl AuthSessionRepo {
         Ok(res.rows_affected())
     }
 
+    // Bind (set) the DPoP JKT only if it is currently NULL.
+    //
+    // This is the safe variant for Step2 (bind-on-first-use):
+    // It prevents overwriting an already-bound session.
+    //
+    // Returns `Ok(Some(row))` when the bind happened,
+    // `Ok(None)` when the session is not found, revoked, or already bound.
+    pub async fn bind_dpop_jkt_if_empty(
+        &self,
+        id: Uuid,
+        dpop_jkt: String,
+        now: DateTime<Utc>,
+    ) -> RepoResult<Option<AuthSessionRow>> {
+        let row = sqlx::query_as!(
+            AuthSessionRow,
+            r#"
+            UPDATE auth_sessions
+            SET dpop_jkt = $2,
+                last_used_at = $3
+            WHERE id = $1
+                AND revoked_at IS NULL
+                AND dpop_jkt IS NULL
+            RETURNING
+                id,
+                user_id,
+                dpop_jkt,
+                created_at,
+                last_used_at,
+                revoked_at
+            "#,
+            id,
+            dpop_jkt,
+            now
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepoError::Db)?;
+
+        Ok(row)
+    }
+
     // Revoke a session.
     pub async fn revoke(&self, id: Uuid, revoked_at: DateTime<Utc>) -> RepoResult<u64> {
         let res = sqlx::query!(
