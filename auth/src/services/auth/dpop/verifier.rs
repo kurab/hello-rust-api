@@ -20,6 +20,8 @@ pub struct VerifiedDpop {
     pub htm: String,
     pub htu: String,
     pub nonce: Option<String>,
+    // RFC7638 thumbprint of the proof JWK (cnf.jkt equivalent)
+    pub jkt: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,15 +89,14 @@ impl DpopVerifier {
     ) -> Result<VerifiedDpop, DpopError> {
         let (header, claims) = self.decode_and_verify_signature(proof_jwt)?;
 
+        let jkt = jwk_thumbprint_from_jwk(header.jwk.as_ref().ok_or(DpopError::InvalidJwt)?)
+            .map_err(|_| DpopError::InvalidJwt)?;
         // Sender-constrained (cnf.jkt) binding.
-        if let Some(expected) = expected_jkt {
-            let got = jwk_thumbprint_from_jwk(header.jwk.as_ref().ok_or(DpopError::InvalidJwt)?)
-                .map_err(|_| DpopError::InvalidJwt)?;
-
-            if got != expected {
-                warn!(got = %got, expected = %expected, "DPoP jkt mismatch");
-                return Err(DpopError::JktMismatch);
-            }
+        if let Some(expected) = expected_jkt
+            && jkt != expected
+        {
+            warn!(got = %jkt, expected = %expected, "DPoP jkt mismatch");
+            return Err(DpopError::JktMismatch);
         }
 
         // htm
@@ -154,6 +155,7 @@ impl DpopVerifier {
             htm: expected_htm,
             htu: expected_htu,
             nonce: claims.nonce,
+            jkt,
         })
     }
 

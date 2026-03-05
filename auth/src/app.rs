@@ -112,12 +112,13 @@ async fn build_state(config: &Config) -> Result<AppState, AppError> {
         sessions,
         config.refresh_token_ttl_seconds,
     )
-    .with_dpop_verifier(dpop_verifier);
+    .with_dpop_verifier(dpop_verifier.clone());
 
     let auth = Arc::new(TokenService::new(
         access_tokens,
         refresh_tokens,
         auth_session_repo,
+        dpop_verifier,
     ));
 
     Ok(AppState::new(auth))

@@ -1,11 +1,13 @@
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::repos::auth_session_repo::AuthSessionRepo;
 use crate::services::auth::{
-    access_token_issuer::AccessTokenService, refresh_token_issuer::RefreshTokenService,
+    access_token_issuer::AccessTokenService, dpop::verifier::DpopVerifier,
+    refresh_token_issuer::RefreshTokenService,
 };
 
 /// Service that orchestrates access-token issuance and refresh-token issuance/rotation.
@@ -17,6 +19,7 @@ pub struct TokenService {
     access_issuer: AccessTokenService,
     refresh_issuer: RefreshTokenService,
     auth_session_repo: AuthSessionRepo,
+    dpop_verifier: Arc<DpopVerifier>,
 }
 
 impl TokenService {
@@ -24,11 +27,13 @@ impl TokenService {
         access_issuer: AccessTokenService,
         refresh_issuer: RefreshTokenService,
         auth_session_repo: AuthSessionRepo,
+        dpop_verifier: Arc<DpopVerifier>,
     ) -> Self {
         Self {
             access_issuer,
             refresh_issuer,
             auth_session_repo,
+            dpop_verifier,
         }
     }
 
@@ -39,11 +44,29 @@ impl TokenService {
     pub async fn issue_token_pair(
         &self,
         sub: Uuid,
-        jkt: Option<String>,
+        dpop_proof: &str,
+        method: &str,
+        url: &str,
     ) -> Result<IssuedTokenPair, AppError> {
+        if dpop_proof.trim().is_empty() {
+            return Err(AppError::Unauthorized);
+        }
+
+        let now: DateTime<Utc> = Utc::now();
+        let verified = self
+            .dpop_verifier
+            .verify_proof(dpop_proof, method, url, None, None, now)
+            .map_err(|e| {
+                error!(user_id = %sub, error = ?e, "DPoP proof verification failed (issue)");
+                AppError::Unauthorized
+            })?;
+
+        // Issue-side: bind jkt immediately (no BOFU).
+        let jkt = verified.jkt;
+
         let session = self
             .auth_session_repo
-            .create(sub, None)
+            .create(sub, Some(jkt))
             .await
             .map_err(|e| {
                 error!(user_id = %sub, error = %e, "Failed to create auth session");
@@ -54,7 +77,7 @@ impl TokenService {
         // Access token (JWT)
         let access_token = self
             .access_issuer
-            .issue_access_token(&sub.to_string(), jkt)
+            .issue_access_token(&sub.to_string(), session.dpop_jkt.clone())
             .await?;
 
         // Refresh token (opaque)

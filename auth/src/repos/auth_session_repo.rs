@@ -92,6 +92,34 @@ impl AuthSessionRepo {
         Ok(row)
     }
 
+    // Lookup for refresh when Step2+ requires an existing DPoP binding.
+    //
+    // Returns (user_id, dpop_jkt) only when the session is active AND already bound.
+    // This is useful once BOFU is removed.
+    pub async fn lookup_refresh_context_bound(
+        &self,
+        session_id: Uuid,
+    ) -> RepoResult<Option<AuthSessionRefreshContextBound>> {
+        let row = sqlx::query_as!(
+            AuthSessionRefreshContextBound,
+            r#"
+            SELECT
+                user_id,
+                dpop_jkt as "dpop_jkt!"
+            FROM auth_sessions
+            WHERE id = $1
+              AND revoked_at IS NULL
+              AND dpop_jkt IS NOT NULL
+            "#,
+            session_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepoError::Db)?;
+
+        Ok(row)
+    }
+
     // Update last_used_at. Caller decides what now is.
     pub async fn touch_last_used(&self, id: Uuid, now: DateTime<Utc>) -> RepoResult<u64> {
         let res = sqlx::query!(
@@ -202,4 +230,10 @@ pub struct AuthSessionRow {
 pub struct AuthSessionRefreshContext {
     pub user_id: Uuid,
     pub dpop_jkt: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AuthSessionRefreshContextBound {
+    pub user_id: Uuid,
+    pub dpop_jkt: String,
 }

@@ -41,9 +41,20 @@ pub async fn token(
             ))
         }
         _ => {
-            // Issue access token + refresh token (minimal refresh, no DPoP binding yet)
+            // Issue access token + refresh token (DPoP-bound session from the start)
             let sub = req.sub.ok_or(AppError::Internal)?;
-            let out = state.auth.issue_token_pair(sub, req.jkt).await?;
+
+            // DPoP header (required)
+            let dpop = headers
+                .get("DPoP")
+                .and_then(|v| v.to_str().ok())
+                .ok_or(AppError::Unauthorized)?;
+
+            let url = uri.to_string();
+            let out = state
+                .auth
+                .issue_token_pair(sub, dpop, method.as_str(), &url)
+                .await?;
 
             Ok((
                 StatusCode::OK,
